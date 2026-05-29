@@ -1,45 +1,54 @@
-# Why Do Tree-Based Models Still Outperform Deep Learning on Tabular Data?
+# Partial Replication: Why Do Tree-Based Models Outperform Deep Learning on Tabular Data?
 
-### A Lightweight Reproduction Study
+A lightweight replication of selected findings from:
 
-This project is a partial reproduction of the paper:
-
-> Grinsztajn et al. (2022) — *Why do tree-based models still outperform deep learning on tabular data?*
-> https://arxiv.org/abs/2207.08815
+> Grinsztajn, L., Oyallon, E., & Varoquaux, G. (2022).
+> *Why do tree-based models still outperform deep learning on tabular data?*
+> arXiv:2207.08815
 
 ---
 
 ## Overview
 
-Tree-based models such as Gradient Boosting Trees and Random Forests often outperform deep learning models on structured tabular datasets, despite the success of deep learning in domains like computer vision and NLP.
+This project partially replicates the core benchmark and two empirical findings
+from Grinsztajn et al. (2022) using 3 tabular datasets, standard scikit-learn
+models, and CPU-only training.
 
-This project reproduces the core benchmark and two empirical findings from the paper using a lightweight experimental setup based on:
+The original paper benchmarks tree-based models against neural networks across
+45 datasets and investigates *why* tree models often outperform deep learning
+on medium-sized tabular data. This replication focuses on three specific claims:
 
-* scikit-learn
-* XGBoost
-* three real-world OpenML datasets
+1. Tree-based models outperform MLPs on many tabular datasets
+2. MLPs degrade more severely under uninformative (noise) features
+3. Tree-based models are sensitive to feature-space rotations, while MLPs are not
 
-The goal is not to exactly reproduce the original paper, but to validate several of its central observations under a smaller and more computationally accessible setting.
+**Scope note:** The original work evaluates PyTorch-based MLP, ResNet,
+FT-Transformer, and SAINT architectures with extensive GPU-based
+hyperparameter searches over 45 datasets. This project uses sklearn's
+`MLPClassifier` / `MLPRegressor` on 3 datasets with fixed hyperparameters.
+
+The results are therefore intended as a **qualitative replication of selected
+findings**, not a full reproduction of the original benchmark.
 
 ---
 
 ## Datasets
 
-All datasets are part of the OpenML benchmark suite used in the original paper.
+All datasets are drawn from the paper's OpenML benchmark suite.
+Datasets are capped at 10,000 samples to match the paper's
+medium-scale tabular setting.
 
-| Dataset            | Task           | Samples | Features |
-| ------------------ | -------------- | ------- | -------- |
-| Bank Marketing     | Classification | 10,000  | 7        |
-| California Housing | Regression     | 10,000  | 8        |
-| Magic Telescope    | Classification | 10,000  | 10       |
-
-For consistency with the paper, datasets were capped at 10,000 samples.
+| Dataset            | Task           | Samples | Features | OpenML ID |
+| ------------------ | -------------- | ------- | -------- | --------- |
+| Bank Marketing     | Classification | 10,000  | 7        | 44126     |
+| California Housing | Regression     | 10,000  | 8        | 44025     |
+| Magic Telescope    | Classification | 10,000  | 10       | 44125     |
 
 ---
 
 ## Models
 
-### Tree-Based Models
+### Tree-based Models
 
 * Random Forest
 * Gradient Boosting Trees (GBT)
@@ -47,20 +56,31 @@ For consistency with the paper, datasets were capped at 10,000 samples.
 
 ### Neural Network
 
-* Multi-Layer Perceptron (MLP)
+* sklearn `MLPClassifier` / `MLPRegressor`
+* 2 hidden layers of 256 units
+* Adam optimizer with early stopping
 
 ---
 
-## Preprocessing
+## Preprocessing Protocol
 
-The preprocessing pipeline follows the methodology described in the paper:
+The original paper applies different preprocessing pipelines to tree models
+and neural networks. This replication follows the same design:
 
-* Tree models receive raw tabular features
-* MLP models receive Gaussianized features using `QuantileTransformer`
-* Classification datasets use stratified train/test splits
-* All experiments use a fixed 70/30 train/test split
+* **Tree models** receive raw input features
+* **MLP** receives Gaussianized features using
+  `QuantileTransformer(output_distribution="normal")`
 
-For the rotation experiment, both models receive the same Gaussianized input in order to isolate the effect of feature rotation.
+This distinction is important because tree-based methods are largely
+scale-invariant, while neural networks are sensitive to feature scaling
+and heterogeneous marginal distributions.
+
+Additional preprocessing:
+
+* Missing rows removed
+* Classification labels encoded
+* 70/30 train-test split
+* Stratified splitting for classification datasets
 
 ---
 
@@ -68,14 +88,20 @@ For the rotation experiment, both models receive the same Gaussianized input in 
 
 ## 1. Benchmark (`benchmark.py`)
 
-This experiment compares all four models on the three datasets using standard supervised learning metrics.
+Direct comparison of all four models on all three datasets.
 
-### Main Observation
+### Results
 
-Tree-based models generally outperform or match the MLP on these tabular datasets.
+| Dataset                    | RF    | GBT   | XGBoost | MLP   |
+| -------------------------- | ----- | ----- | ------- | ----- |
+| Bank Marketing (Accuracy)  | 0.800 | 0.803 | 0.789   | 0.774 |
+| California Housing (R²)    | 0.653 | 0.668 | 0.675   | 0.622 |
+| Magic Telescope (Accuracy) | 0.858 | 0.854 | 0.859   | 0.855 |
 
-* On **Bank Marketing** and **California Housing**, tree ensembles achieve the best performance.
-* On **Magic Telescope**, the performance gap is much smaller, consistent with the original paper's observation that neural networks can become competitive on certain datasets.
+Tree-based models outperform MLP on Bank Marketing and California Housing.
+On Magic Telescope the gap is very small (≤ 0.004), consistent with the
+paper's observation that the advantage magnitude varies substantially
+across datasets.
 
 ![Benchmark](fig1_benchmark.png)
 
@@ -83,95 +109,85 @@ Tree-based models generally outperform or match the MLP on these tabular dataset
 
 ## 2. Sensitivity to Uninformative Features (`finding2.py`)
 
-This experiment reproduces one of the paper's central findings:
+Random Gaussian noise features (0, 5, 10, 20, 50) are appended to each dataset.
+Performance is measured for GBT and MLP under increasing feature noise.
 
-> Neural networks are more sensitive to irrelevant input features than tree-based models.
+Results are averaged across 5 random seeds.
 
-We progressively add random Gaussian noise features:
+### California Housing (R²)
 
-[
-0,\ 5,\ 10,\ 20,\ 50
-]
+| Noise Features | GBT           | MLP           |
+| -------------- | ------------- | ------------- |
+| 0              | 0.657 ± 0.000 | 0.622 ± 0.001 |
+| 50             | 0.630 ± 0.005 | 0.362 ± 0.014 |
 
-and measure the degradation in performance for:
+GBT drops by only 0.027, while MLP drops by 0.260.
 
-* Gradient Boosting Trees (GBT)
-* MLP
+A similar pattern appears across all three datasets:
+tree-based models remain comparatively robust as irrelevant features increase,
+while MLP performance deteriorates substantially.
 
-Results are averaged across 5 random seeds, and standard deviations are reported.
-
-### Main Observation
-
-MLP performance degrades substantially faster as irrelevant features are added.
-
-For example, on **California Housing**:
-
-* MLP:
-  [
-  R^2: 0.622 \rightarrow 0.362
-  ]
-
-* GBT:
-  [
-  R^2: 0.657 \rightarrow 0.630
-  ]
-
-This reproduces the paper's conclusion that tree-based methods are significantly more robust to uninformative features.
+This behavior qualitatively aligns with Finding 2 of the original paper.
 
 ![Finding 2](fig2_finding2.png)
 
 ---
 
-## 3. Rotation Sensitivity (`finding3.py`)
+## 3. Rotation Invariance (`finding3.py`)
 
-This experiment investigates rotational invariance.
+Features are first Gaussianized, then random orthogonal rotations are applied
+using `scipy.stats.special_ortho_group`.
 
-Features are first Gaussianized and then transformed using random orthogonal rotation matrices generated with:
-
-```python
-scipy.stats.special_ortho_group
-```
-
-The experiment compares model performance before and after rotation.
+Unlike the benchmark experiment, both GBT and MLP receive identical rotated
+inputs in order to isolate the effect of feature-space orientation.
 
 Results are averaged across:
 
-* 10 random rotations
+* 10 random rotation matrices
 * 3 model initialization seeds
 
-### Main Observation
+### California Housing (R²)
 
-Tree-based models are highly sensitive to feature rotation, while MLP performance remains nearly unchanged.
+| Setting  | GBT           | MLP           |
+| -------- | ------------- | ------------- |
+| Original | 0.657 ± 0.000 | 0.622 ± 0.002 |
+| Rotated  | 0.550 ± 0.009 | 0.624 ± 0.004 |
 
-For example, on **California Housing**:
+GBT performance drops significantly after rotation, while MLP remains nearly
+unchanged.
 
-* GBT:
-  [
-  R^2: 0.657 \rightarrow 0.550
-  ]
+On Magic Telescope, MLP slightly surpasses GBT after rotation,
+matching the qualitative trend reported in the original paper.
 
-* MLP:
-  [
-  R^2: 0.622 \rightarrow 0.624
-  ]
-
-This supports the paper's hypothesis that tree-based methods exploit the natural axis-aligned structure of tabular data, whereas MLPs are approximately rotation-invariant.
-
-Interestingly, on **Magic Telescope**, the rotated MLP slightly outperforms GBT, matching the qualitative behavior reported in the original paper.
+These results support the hypothesis that tree-based methods exploit
+axis-aligned structure in tabular datasets, whereas MLPs are approximately
+rotation-invariant.
 
 ![Finding 3](fig3_finding3.png)
 
 ---
 
-# Running the Project
+# How to Run
 
-## Install Dependencies
+### Requirements
+
+* Python 3.9+
+* CPU-only execution
+* Approximate runtime: 20–30 minutes total
+
+Install dependencies:
 
 ```bash
-pip install scikit-learn xgboost matplotlib scipy pandas numpy
+pip install scikit-learn xgboost matplotlib seaborn scipy pandas numpy
 ```
 
-## Run Experiments
+Download the ARFF datasets from OpenML and place them in the project root:
+
+* `bank_marketing.arff` — https://www.openml.org/d/44126
+* `california.arff` — https://www.openml.org/d/44025
+* `magic_telescope.arff` — https://www.openml.org/d/44125
+
+Run experiments:
 
 ```bash
 python benchmark.py
@@ -180,54 +196,51 @@ python finding3.py
 python visualize.py
 ```
 
-Place the `.arff` dataset files in the project directory before running the experiments.
+Approximate runtimes:
+
+| Script         | Runtime |
+| -------------- | ------- |
+| `benchmark.py` | ~2 min  |
+| `finding2.py`  | ~8 min  |
+| `finding3.py`  | ~15 min |
+| `visualize.py` | <1 min  |
+
+Generated outputs:
+
+* CSV result files
+* Publication-style PNG figures
 
 ---
 
 # Project Structure
 
 ```text
-project/
-│
 ├── data_loader.py
 ├── benchmark.py
 ├── finding2.py
 ├── finding3.py
 ├── visualize.py
-│
 ├── benchmark_results.csv
 ├── finding2_results.csv
 ├── finding3_results.csv
-│
 ├── fig1_benchmark.png
 ├── fig2_finding2.png
-├── fig3_finding3.png
-│
-└── README.md
+└── fig3_finding3.png
 ```
-
----
-
-# Key Takeaways
-
-* Tree-based ensembles remain highly competitive on tabular datasets
-* MLPs are substantially more sensitive to irrelevant features
-* Tree models rely strongly on axis-aligned feature structure
-* MLPs are comparatively rotation-invariant
-* The reproduced findings are consistent across multiple random seeds and rotations
 
 ---
 
 # Limitations
 
-This is a lightweight reproduction and differs from the original paper in several ways:
+* Only 3 datasets are evaluated (vs. 45 in the original paper)
+* sklearn MLP is used instead of the paper's PyTorch implementation
+* No large-scale hyperparameter search is performed
+* Transformer-based tabular architectures are not included
+* Finding 1 from the original paper is not replicated
+* No formal statistical significance testing is conducted
 
-* Only 3 datasets are used instead of 45
-* Hyperparameter tuning is limited
-* Only MLPs are evaluated among neural architectures
-* Computational scale is much smaller than the original benchmark
-
-Therefore, the results should be interpreted as qualitative reproductions rather than exact replications.
+Accordingly, the results should be interpreted as a lightweight qualitative
+replication rather than a definitive benchmark study.
 
 ---
 
@@ -236,3 +249,7 @@ Therefore, the results should be interpreted as qualitative reproductions rather
 Grinsztajn, L., Oyallon, E., & Varoquaux, G. (2022).
 *Why do tree-based models still outperform deep learning on tabular data?*
 arXiv:2207.08815
+
+Original benchmark code:
+https://github.com/LeoGrin/tabular-benchmark
+
