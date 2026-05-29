@@ -44,6 +44,10 @@ def make_models(task, seed):
         }
 
 def run_finding2(dataset_name):
+    # GBT is used as the sole tree representative here.
+    # It achieves the most consistent benchmark performance across all 3 datasets.
+    # Using all tree models would clutter the visualization without adding
+    # new information — the goal is to contrast tree behavior vs MLP as a class.
     ds = load_dataset(dataset_name)
     task = ds["task"]
     metric_fn = accuracy_score if task == "classification" else r2_score
