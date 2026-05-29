@@ -1,0 +1,13 @@
+dataset,task,model,metric,score,time_s
+bank_marketing,classification,RandomForest,Accuracy,0.8003,0.63
+bank_marketing,classification,GBT,Accuracy,0.803,1.93
+bank_marketing,classification,XGBoost,Accuracy,0.7887,0.38
+bank_marketing,classification,MLP,Accuracy,0.7743,2.09
+california,regression,RandomForest,R²,0.6527,1.91
+california,regression,GBT,R²,0.6682,4.31
+california,regression,XGBoost,R²,0.6754,0.23
+california,regression,MLP,R²,0.6224,3.37
+magic_telescope,classification,RandomForest,Accuracy,0.8577,1.15
+magic_telescope,classification,GBT,Accuracy,0.8543,7.2
+magic_telescope,classification,XGBoost,Accuracy,0.8587,0.24
+magic_telescope,classification,MLP,Accuracy,0.8547,2.78
