@@ -43,6 +43,11 @@ def make_models(task, seed):
         }
 
 def run_finding3(dataset_name):
+    # GBT is used as the sole tree representative here.
+    # It achieves the most consistent benchmark performance across all 3 datasets.
+    # Using all tree models would clutter the slope charts without adding
+    # new information — the goal is to isolate the rotation effect, not compare
+    # tree architectures against each other.
     ds = load_dataset(dataset_name)
     task = ds["task"]
     n_features = ds["X_train"].shape[1]
