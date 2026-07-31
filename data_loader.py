@@ -1,41 +1,91 @@
 import pandas as pd
 import numpy as np
-from scipy.io import arff
+from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import QuantileTransformer, LabelEncoder, OneHotEncoder
 from sklearn.model_selection import train_test_split
 
-DATASETS = {
-    "bank_marketing":  {"file": "bank_marketing.arff",  "task": "classification"},
-    "california":      {"file": "california.arff",       "task": "regression"},
-    "magic_telescope": {"file": "magic_telescope.arff",  "task": "classification"},
+from config import DATASETS, MASTER_SEED, MAX_SAMPLES, TEST_SIZE, OPENML_CACHE_DIR
+
+# Validation metadata, not experiment configuration -- lives here, not in
+# config.py. Feature count is an exact expectation (from the paper's own
+# tables); row count is a loose sanity band, since minor OpenML-side
+# corrections since publication are plausible and shouldn't trip a false
+# failure. Confirmed exactly against a live fetch for bank_marketing via
+# spike_fetch_openml.py; california/magic_telescope not yet spiked, so
+# treat their bands as slightly less certain until Commit 3 actually runs.
+#
+# Looked up by direct indexing (EXPECTED_SHAPES[name], not .get(name)) so
+# a dataset added to config.DATASETS without a corresponding entry here
+# fails loudly with a KeyError on first load, rather than silently
+# skipping validation for it.
+EXPECTED_SHAPES = {
+    "bank_marketing": (10578, 7),
+    "california": (20640, 8),
+    "magic_telescope": (13376, 10),
 }
 
+
+def _validate_fetch(name, bunch):
+    """
+    Fail-fast identity check: feature count must match exactly, row count
+    must be in the right neighborhood. Deliberately minimal -- fetching by
+    a pinned data_id already rules out the name/task-ID resolution bug
+    that caused the original incident; this just guards against gross
+    data corruption or a wrong ID.
+    """
+    exp_rows, exp_cols = EXPECTED_SHAPES[name]
+    n_rows, n_cols = bunch.data.shape
+
+    if n_cols != exp_cols:
+        raise ValueError(
+            f"Identity check failed for '{name}': expected {exp_cols} "
+            f"features, got {n_cols}. Refusing to proceed with a dataset "
+            f"that doesn't match what was requested."
+        )
+    if not (0.5 * exp_rows <= n_rows <= 1.5 * exp_rows):
+        raise ValueError(
+            f"Identity check failed for '{name}': expected roughly "
+            f"{exp_rows} rows, got {n_rows}. Refusing to proceed with a "
+            f"dataset that doesn't match what was requested."
+        )
+
+
 def load_dataset(name):
-    config = DATASETS[name]
-    print(f"Loading {name}...")
+    ds_config = DATASETS[name]
+    print(f"Loading {name} (OpenML id={ds_config['openml_id']})...")
 
-    raw, meta = arff.loadarff(config["file"])
-    df = pd.DataFrame(raw)
+    # target_column intentionally omitted: confirmed via spike that
+    # target_column="default-target" is identical to fetch_openml's own
+    # default, so stating it explicitly added a parameter with no
+    # behavioral effect.
+    bunch = fetch_openml(
+        data_id=ds_config["openml_id"],
+        as_frame=True,
+        parser="pandas",
+        data_home=OPENML_CACHE_DIR,
+        cache=True,
+    )
+    _validate_fetch(name, bunch)
 
-    # Decode byte strings ARFF files produce
-    for col in df.select_dtypes(include=["object"]).columns:
-        df[col] = df[col].str.decode("utf-8")
+    X = bunch.data.copy()
+    y = bunch.target.copy()
 
-    target_col = df.columns[-1]
-    X = df.drop(columns=[target_col]).copy()
-    y = df[target_col].copy()
-
-    # Encode classification target to integers
-    if config["task"] == "classification":
+    # Encode classification target to integers. y arrives as category
+    # dtype (confirmed via spike, e.g. bank_marketing's '1'/'2' labels);
+    # .astype(str) handles that correctly, same as it always has.
+    if ds_config["task"] == "classification":
         le = LabelEncoder()
-        y = pd.Series(le.fit_transform(y.astype(str)), name=target_col)
+        y = pd.Series(le.fit_transform(y.astype(str)), name=y.name)
     else:
         y = pd.to_numeric(y, errors="coerce")
 
-    # Separate numeric and categorical input features
-    cat_cols = X.select_dtypes(include=["object"]).columns.tolist()
-    num_cols = X.select_dtypes(exclude=["object"]).columns.tolist()
-
+    # Separate numeric and categorical input features. Includes "category"
+    # alongside "object" -- fetch_openml's pandas parser infers proper
+    # categorical dtype for nominal features. (bank_marketing happens to
+    # have zero categorical features per the spike, but california/
+    # magic_telescope haven't been checked yet, so this stays generic.)
+    cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
+    num_cols = X.select_dtypes(exclude=["object", "category"]).columns.tolist()
     X[num_cols] = X[num_cols].apply(pd.to_numeric, errors="coerce")
 
     # Drop rows with any missing values (paper's methodology)
@@ -45,16 +95,16 @@ def load_dataset(name):
     X = X[mask].reset_index(drop=True)
     y = y[mask].reset_index(drop=True)
 
-    # Cap at 10,000 samples (paper's medium-sized regime)
-    if len(X) > 10000:
-        idx = np.random.RandomState(42).choice(len(X), 10000, replace=False)
+    # Cap at MAX_SAMPLES (paper's medium-sized regime)
+    if len(X) > MAX_SAMPLES:
+        idx = np.random.RandomState(MASTER_SEED).choice(len(X), MAX_SAMPLES, replace=False)
         X = X.iloc[idx].reset_index(drop=True)
         y = y.iloc[idx].reset_index(drop=True)
 
     # Stratify classification splits to preserve class balance
-    stratify = y if config["task"] == "classification" else None
+    stratify = y if ds_config["task"] == "classification" else None
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42, stratify=stratify
+        X, y, test_size=TEST_SIZE, random_state=MASTER_SEED, stratify=stratify
     )
 
     # Handle categorical features with OneHotEncoding for tree models
@@ -77,11 +127,10 @@ def load_dataset(name):
         )
     else:
         X_train = X_train[num_cols].reset_index(drop=True)
-        X_test  = X_test[num_cols].reset_index(drop=True)
+        X_test = X_test[num_cols].reset_index(drop=True)
 
     # Gaussianize features for MLP only — fit on train, apply to test
-    # This follows the paper's preprocessing for neural networks
-    qt = QuantileTransformer(output_distribution="normal", random_state=42)
+    qt = QuantileTransformer(output_distribution="normal", random_state=MASTER_SEED)
     X_train_nn = pd.DataFrame(
         qt.fit_transform(X_train), columns=X_train.columns
     )
@@ -89,19 +138,20 @@ def load_dataset(name):
         qt.transform(X_test), columns=X_test.columns
     )
 
-    print(f"  shape: {X.shape}, task: {config['task']}, "
+    print(f"  shape: {X.shape}, task: {ds_config['task']}, "
           f"cat_features: {len(cat_cols)}, num_features: {len(num_cols)}")
 
     return {
-        "name":       name,
-        "task":       config["task"],
-        "X_train":    X_train,      # raw (OHE applied) — for tree models
-        "X_test":     X_test,
-        "X_train_nn": X_train_nn,   # gaussianized — for MLP
-        "X_test_nn":  X_test_nn,
-        "y_train":    y_train,
-        "y_test":     y_test,
+        "name": name,
+        "task": ds_config["task"],
+        "X_train": X_train,
+        "X_test": X_test,
+        "X_train_nn": X_train_nn,
+        "X_test_nn": X_test_nn,
+        "y_train": y_train,
+        "y_test": y_test,
     }
+
 
 if __name__ == "__main__":
     for name in DATASETS:
