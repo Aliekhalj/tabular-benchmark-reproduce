@@ -8,6 +8,10 @@ from sklearn.preprocessing import QuantileTransformer
 from config import DATASETS, NOISE_LEVELS, NOISE_SEEDS, FINDING_N_ESTIMATORS
 from data_loader import load_dataset
 from models import get_models
+from experiment_utils import (
+    IncrementalCSVWriter, ExperimentTracker, log_stage, format_exception,
+    STAGE_COMPUTATION, STAGE_WRITE,
+)
 
 
 def run_finding2(dataset_name):
@@ -15,12 +19,13 @@ def run_finding2(dataset_name):
     # It achieves the most consistent benchmark performance across all 3 datasets.
     # Using all tree models would clutter the visualization without adding
     # new information — the goal is to contrast tree behavior vs MLP as a class.
+    log_stage(dataset_name, "Loading...")
     ds = load_dataset(dataset_name)
     task = ds["task"]
     metric_fn = accuracy_score if task == "classification" else r2_score
     metric_name = "Accuracy" if task == "classification" else "R²"
 
-    # scores[model][noise_level] = list of scores across seeds
+    log_stage(dataset_name, "Running...")
     scores = {"GBT": {n: [] for n in NOISE_LEVELS},
               "MLP": {n: [] for n in NOISE_LEVELS}}
 
@@ -28,7 +33,6 @@ def run_finding2(dataset_name):
         rng = np.random.RandomState(seed)
 
         for n_noise in NOISE_LEVELS:
-            # Generate noise features — fresh per seed so we average over content
             noise_train = rng.randn(ds["X_train"].shape[0], n_noise)
             noise_test = rng.randn(ds["X_test"].shape[0], n_noise)
             noise_cols = [f"noise_{i}" for i in range(n_noise)]
@@ -42,11 +46,8 @@ def run_finding2(dataset_name):
                 pd.DataFrame(noise_test, columns=noise_cols)
             ], axis=1)
 
-            # Gaussianize for MLP — fit on train only to avoid leakage
             # NOTE: random_state=seed here is intentional and must stay
-            # tied to the per-iteration noise seed, not MASTER_SEED — it
-            # is what makes this Gaussianization vary across NOISE_SEEDS
-            # along with the noise content itself.
+            # tied to the per-iteration noise seed, not MASTER_SEED.
             qt = QuantileTransformer(output_distribution="normal", random_state=seed)
             X_train_nn = pd.DataFrame(
                 qt.fit_transform(X_train_noisy), columns=X_train_noisy.columns
@@ -66,7 +67,6 @@ def run_finding2(dataset_name):
                 metric_fn(ds["y_test"], models["MLP"].predict(X_test_nn))
             )
 
-    # Aggregate results
     print(f"\n--- Finding 2: {dataset_name} ({metric_name}) ---")
     print(f"  {'noise':>6} | {'GBT mean':>10} {'±std':>7} | {'MLP mean':>10} {'±std':>7}")
     print(f"  {'-'*52}")
@@ -91,14 +91,29 @@ def run_finding2(dataset_name):
             "MLP_std": round(mlp_std, 4),
         })
 
-    return pd.DataFrame(rows)
+    return rows
 
 
-all_results = []
+writer = IncrementalCSVWriter("finding2_results.csv")
+tracker = ExperimentTracker()
+
 for name in DATASETS:
-    df = run_finding2(name)
-    all_results.append(df)
+    try:
+        rows = run_finding2(name)
+    except Exception as exc:
+        tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
+        log_stage(name, f"Failed (computation): {format_exception(exc)}")
+        continue
 
-final = pd.concat(all_results, ignore_index=True)
-final.to_csv("finding2_results.csv", index=False)
-print("\nSaved to finding2_results.csv")
+    try:
+        writer.add_rows(rows)
+    except Exception as exc:
+        tracker.record_failure(name, exc, stage=STAGE_WRITE)
+        log_stage(name, f"Failed (write): {format_exception(exc)}")
+        continue
+
+    tracker.record_success(name)
+    log_stage(name, "Finished.")
+
+tracker.print_summary()
+print(f"\nSaved to {writer.path}")

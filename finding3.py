@@ -1,7 +1,6 @@
-# finding3.py 
+# finding3.py
 
 import numpy as np
-import pandas as pd
 from scipy.stats import special_ortho_group
 from sklearn.metrics import accuracy_score, r2_score
 from sklearn.preprocessing import QuantileTransformer
@@ -9,6 +8,10 @@ from sklearn.preprocessing import QuantileTransformer
 from config import DATASETS, N_ROTATIONS, ROTATION_MODEL_SEEDS, MASTER_SEED, FINDING_N_ESTIMATORS
 from data_loader import load_dataset
 from models import get_models
+from experiment_utils import (
+    IncrementalCSVWriter, ExperimentTracker, log_stage, format_exception,
+    STAGE_COMPUTATION, STAGE_WRITE,
+)
 
 
 def run_finding3(dataset_name):
@@ -17,19 +20,16 @@ def run_finding3(dataset_name):
     # Using all tree models would clutter the slope charts without adding
     # new information — the goal is to isolate the rotation effect, not compare
     # tree architectures against each other.
+    log_stage(dataset_name, "Loading...")
     ds = load_dataset(dataset_name)
     task = ds["task"]
     n_features = ds["X_train"].shape[1]
     metric_fn = accuracy_score if task == "classification" else r2_score
     metric_name = "Accuracy" if task == "classification" else "R²"
 
-    # Gaussianize features before rotation — same as the paper.
-    # This removes scale differences between features so the rotation
-    # is a pure orientation change, not confounded by feature scales.
-    # Both models receive the same preprocessed data in this experiment.
-    # NOTE: this uses MASTER_SEED, not a per-iteration seed — it runs once,
-    # before either seed loop below, unlike finding2.py's per-noise-level
-    # QuantileTransformer, which intentionally varies with the loop seed.
+    log_stage(dataset_name, "Running...")
+    # NOTE: uses MASTER_SEED, not a per-iteration seed -- runs once, before
+    # either seed loop below, unlike finding2.py's per-noise QuantileTransformer.
     qt = QuantileTransformer(output_distribution="normal", random_state=MASTER_SEED)
     X_train_g = qt.fit_transform(ds["X_train"])
     X_test_g = qt.transform(ds["X_test"])
@@ -37,11 +37,6 @@ def run_finding3(dataset_name):
     scores = {"original": {"GBT": [], "MLP": []},
               "rotated": {"GBT": [], "MLP": []}}
 
-    # Original: vary only model seed — no rotation applied
-    # NOTE: get_models() returns RandomForest/XGBoost too, but we only fit
-    # and score GBT/MLP here — explicit key access rather than .items(),
-    # since get_models() (unlike the old make_models()) always returns all
-    # four models and .items() would otherwise yield keys scores[] doesn't have.
     for seed in ROTATION_MODEL_SEEDS:
         models = get_models(task, seed=seed, n_estimators=FINDING_N_ESTIMATORS)
         for mname in ["GBT", "MLP"]:
@@ -51,7 +46,6 @@ def run_finding3(dataset_name):
                 metric_fn(ds["y_test"], model.predict(X_test_g))
             )
 
-    # Rotated: vary both rotation matrix and model seed
     for rot_seed in range(N_ROTATIONS):
         R = special_ortho_group.rvs(n_features, random_state=rot_seed)
         X_train_r = X_train_g @ R
@@ -66,7 +60,6 @@ def run_finding3(dataset_name):
                     metric_fn(ds["y_test"], model.predict(X_test_r))
                 )
 
-    # Report results
     print(f"\n--- Finding 3: {dataset_name} ({metric_name}) ---")
     print(f"  {'setting':>10} | {'GBT mean':>10} {'±std':>7} | "
           f"{'MLP mean':>10} {'±std':>7}")
@@ -92,14 +85,29 @@ def run_finding3(dataset_name):
             "MLP_std": round(mlp_std, 4),
         })
 
-    return pd.DataFrame(rows)
+    return rows
 
 
-all_results = []
+writer = IncrementalCSVWriter("finding3_results.csv")
+tracker = ExperimentTracker()
+
 for name in DATASETS:
-    df = run_finding3(name)
-    all_results.append(df)
+    try:
+        rows = run_finding3(name)
+    except Exception as exc:
+        tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
+        log_stage(name, f"Failed (computation): {format_exception(exc)}")
+        continue
 
-final = pd.concat(all_results, ignore_index=True)
-final.to_csv("finding3_results.csv", index=False)
-print("\nSaved to finding3_results.csv")
+    try:
+        writer.add_rows(rows)
+    except Exception as exc:
+        tracker.record_failure(name, exc, stage=STAGE_WRITE)
+        log_stage(name, f"Failed (write): {format_exception(exc)}")
+        continue
+
+    tracker.record_success(name)
+    log_stage(name, "Finished.")
+
+tracker.print_summary()
+print(f"\nSaved to {writer.path}")
