@@ -3,14 +3,16 @@
 """
 Small shared infrastructure for the experiment scripts (benchmark.py,
 finding2.py, finding3.py): per-dataset lifecycle logging, incremental
-CSV writing, and success/failure tracking with a final summary that
-distinguishes computation failures from result-persistence failures.
+CSV writing, timing, and success/failure tracking with a final summary
+that distinguishes computation failures from result-persistence failures.
 
 Contains no experiment logic, no metrics, no model code, and no
-preprocessing -- purely the failure-isolation and reporting scaffolding
-around the per-dataset loop that's identical across all three scripts.
+preprocessing -- purely the failure-isolation, timing, and reporting
+scaffolding around the per-dataset loop that's identical across all
+three scripts.
 """
 
+import time
 import pandas as pd
 
 STAGE_COMPUTATION = "computation"
@@ -24,8 +26,36 @@ def log_stage(dataset_name, message):
 
 def format_exception(exc):
     """Consistent 'ExceptionType: message' formatting, used both in the
-    live per-dataset failure log and in the final run summary."""
+    live per-dataset failure log and (via log_failed) nowhere else --
+    the run summary intentionally omits exception text, since it was
+    already printed in full at the moment of failure."""
     return f"{type(exc).__name__}: {exc}"
+
+
+def log_finished(name, start_time):
+    """
+    Logs '[name] Finished. (X.XX s)' for a dataset that completed
+    successfully (computation and, if applicable, write). start_time is
+    a time.perf_counter() value captured by the caller when the
+    dataset's processing began. Returns the elapsed time, in case a
+    caller wants it; unused by the current scripts.
+    """
+    elapsed = time.perf_counter() - start_time
+    log_stage(name, f"Finished. ({elapsed:.2f} s)")
+    return elapsed
+
+
+def log_failed(name, stage, start_time, exc):
+    """
+    Logs the two-line '[name] Failed (stage) after X.XX s:' + exception
+    message for a dataset that failed at the given stage (STAGE_COMPUTATION
+    or STAGE_WRITE). Elapsed is computed the same way as log_finished().
+    Returns the elapsed time, same reasoning as log_finished().
+    """
+    elapsed = time.perf_counter() - start_time
+    log_stage(name, f"Failed ({stage}) after {elapsed:.2f} s:")
+    print(format_exception(exc))
+    return elapsed
 
 
 class IncrementalCSVWriter:
@@ -37,22 +67,17 @@ class IncrementalCSVWriter:
     which makes duplicate rows structurally impossible.
 
     If a write fails, the rows just added are rolled back out of the
-    in-memory accumulator before the exception is re-raised. Without this,
-    a failed dataset's rows would remain in memory and could be silently
-    included in a later, unrelated successful write -- making a "failed
-    (write)" classification in the run summary potentially inaccurate by
-    the time the run finishes. The rollback keeps that classification
-    permanently trustworthy.
+    in-memory accumulator before the exception is re-raised, so a
+    "failed (write)" classification stays a permanently accurate
+    statement about the final file rather than a snapshot that could be
+    contradicted by a later, unrelated successful write.
 
     Known, accepted limitation: a process killed during the brief window
-    of the to_csv() call itself could still leave a truncated file. Not
-    guarded against here (would need write-to-temp-then-atomic-rename) --
-    out of scope for this commit, noted so it's a deliberate choice, not
-    an oversight.
+    of the to_csv() call itself could still leave a truncated file --
+    out of scope, a deliberate choice rather than an oversight.
 
     Each run starts fresh: the first successful add_rows() call writes
-    (overwrites) the target file, matching the existing to_csv() behavior
-    of the scripts being modified here. There is no cross-run resume.
+    (overwrites) the target file. There is no cross-run resume.
     """
     def __init__(self, path):
         self.path = path
@@ -83,14 +108,22 @@ class ExperimentTracker:
     def record_failure(self, name, exc, stage):
         self.failed.append((name, exc, stage))
 
-    def print_summary(self):
-        print("\n" + "=" * 60)
+    def print_summary(self, total_runtime):
+        n_success = len(self.successful)
+        n_failed = len(self.failed)
+        n_total = n_success + n_failed
+
+        print("\n" + "=" * 50)
         print("Run summary")
-        print("=" * 60)
-        print(f"Successful datasets ({len(self.successful)}):")
+        print("=" * 50)
+        print(f"Datasets processed: {n_total}")
+        print(f"Successful: {n_success}")
+        print(f"Failed: {n_failed}")
+        print(f"Total runtime: {total_runtime:.2f} s")
+        print("Successful datasets:")
         for name in self.successful:
-            print(f"  - {name}")
-        print(f"Failed datasets ({len(self.failed)}):")
+            print(f" - {name}")
+        print("Failed datasets:")
         for name, exc, stage in self.failed:
-            print(f"  - {name} [{stage}]: {format_exception(exc)}")
-        print("=" * 60)
+            print(f" - {name} [{stage}]")
+        print("=" * 50)

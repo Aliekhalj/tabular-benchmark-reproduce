@@ -7,12 +7,15 @@ from config import DATASETS
 from data_loader import load_dataset
 from models import get_models
 from experiment_utils import (
-    IncrementalCSVWriter, ExperimentTracker, log_stage, format_exception,
-    STAGE_COMPUTATION, STAGE_WRITE,
+    IncrementalCSVWriter, ExperimentTracker, log_stage,
+    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 
 def evaluate(model, X_train, X_test, y_train, y_test, task):
+    # NOTE: uses time.time(), not time.perf_counter() -- this is
+    # pre-existing, produces the "time_s" CSV column, and is
+    # deliberately left untouched. See design notes for this commit.
     start = time.time()
     model.fit(X_train, y_train)
     elapsed = round(time.time() - start, 2)
@@ -30,10 +33,8 @@ def evaluate(model, X_train, X_test, y_train, y_test, task):
 
 def run_benchmark_for_dataset(name):
     """
-    Full benchmark computation for one dataset -- identical logic to what
-    used to live directly in the top-level loop, moved into a function
-    only so the loop can wrap it in a try/except at the dataset boundary.
-    No change to what is computed or how.
+    Full benchmark computation for one dataset. Unchanged since Commit 1 --
+    this commit only changes how the outer loop times and logs around it.
     """
     log_stage(name, "Loading...")
     ds = load_dataset(name)
@@ -67,26 +68,29 @@ def run_benchmark_for_dataset(name):
     return rows
 
 
+run_start = time.perf_counter()
 writer = IncrementalCSVWriter("benchmark_results.csv")
 tracker = ExperimentTracker()
 
 for name in DATASETS:
+    start = time.perf_counter()
     try:
         rows = run_benchmark_for_dataset(name)
     except Exception as exc:
         tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
-        log_stage(name, f"Failed (computation): {format_exception(exc)}")
+        log_failed(name, STAGE_COMPUTATION, start, exc)
         continue
 
     try:
         writer.add_rows(rows)
     except Exception as exc:
         tracker.record_failure(name, exc, stage=STAGE_WRITE)
-        log_stage(name, f"Failed (write): {format_exception(exc)}")
+        log_failed(name, STAGE_WRITE, start, exc)
         continue
 
     tracker.record_success(name)
-    log_stage(name, "Finished.")
+    log_finished(name, start)
 
-tracker.print_summary()
+total_runtime = time.perf_counter() - run_start
+tracker.print_summary(total_runtime)
 print(f"\nResults saved to {writer.path}")

@@ -1,5 +1,6 @@
 # finding2.py
 
+import time
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, r2_score
@@ -9,8 +10,8 @@ from config import DATASETS, NOISE_LEVELS, NOISE_SEEDS, FINDING_N_ESTIMATORS
 from data_loader import load_dataset
 from models import get_models
 from experiment_utils import (
-    IncrementalCSVWriter, ExperimentTracker, log_stage, format_exception,
-    STAGE_COMPUTATION, STAGE_WRITE,
+    IncrementalCSVWriter, ExperimentTracker, log_stage,
+    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 
@@ -94,26 +95,29 @@ def run_finding2(dataset_name):
     return rows
 
 
+run_start = time.perf_counter()
 writer = IncrementalCSVWriter("finding2_results.csv")
 tracker = ExperimentTracker()
 
 for name in DATASETS:
+    start = time.perf_counter()
     try:
         rows = run_finding2(name)
     except Exception as exc:
         tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
-        log_stage(name, f"Failed (computation): {format_exception(exc)}")
+        log_failed(name, STAGE_COMPUTATION, start, exc)
         continue
 
     try:
         writer.add_rows(rows)
     except Exception as exc:
         tracker.record_failure(name, exc, stage=STAGE_WRITE)
-        log_stage(name, f"Failed (write): {format_exception(exc)}")
+        log_failed(name, STAGE_WRITE, start, exc)
         continue
 
     tracker.record_success(name)
-    log_stage(name, "Finished.")
+    log_finished(name, start)
 
-tracker.print_summary()
+total_runtime = time.perf_counter() - run_start
+tracker.print_summary(total_runtime)
 print(f"\nSaved to {writer.path}")
