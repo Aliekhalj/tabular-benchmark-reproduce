@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, r2_score
 from sklearn.preprocessing import QuantileTransformer
 
 from config import DATASETS, N_ROTATIONS, ROTATION_MODEL_SEEDS, MASTER_SEED, FINDING_N_ESTIMATORS
-from data_loader import load_dataset
+from data_loader import load_dataset, validate_dataset_registry
 from models import get_models
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
@@ -88,6 +88,8 @@ def run_finding3(dataset_name):
 
     return rows
 
+
+validate_dataset_registry()
 
 run_start = time.perf_counter()
 writer = IncrementalCSVWriter("finding3_results.csv")

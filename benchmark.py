@@ -4,7 +4,7 @@ import time
 from sklearn.metrics import accuracy_score, r2_score
 
 from config import DATASETS
-from data_loader import load_dataset
+from data_loader import load_dataset, validate_dataset_registry
 from models import get_models
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
@@ -15,7 +15,8 @@ from experiment_utils import (
 def evaluate(model, X_train, X_test, y_train, y_test, task):
     # NOTE: uses time.time(), not time.perf_counter() -- this is
     # pre-existing, produces the "time_s" CSV column, and is
-    # deliberately left untouched. See design notes for this commit.
+    # deliberately left untouched. See design notes from the previous
+    # commit (structured logging).
     start = time.time()
     model.fit(X_train, y_train)
     elapsed = round(time.time() - start, 2)
@@ -33,8 +34,8 @@ def evaluate(model, X_train, X_test, y_train, y_test, task):
 
 def run_benchmark_for_dataset(name):
     """
-    Full benchmark computation for one dataset. Unchanged since Commit 1 --
-    this commit only changes how the outer loop times and logs around it.
+    Full benchmark computation for one dataset. Unchanged -- this commit
+    only adds the registry validation call below, before the loop.
     """
     log_stage(name, "Loading...")
     ds = load_dataset(name)
@@ -67,6 +68,8 @@ def run_benchmark_for_dataset(name):
         })
     return rows
 
+
+validate_dataset_registry()
 
 run_start = time.perf_counter()
 writer = IncrementalCSVWriter("benchmark_results.csv")

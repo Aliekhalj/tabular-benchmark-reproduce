@@ -1,3 +1,5 @@
+# data_loader.py
+
 import pandas as pd
 import numpy as np
 from sklearn.datasets import fetch_openml
@@ -10,19 +12,57 @@ from config import DATASETS, MASTER_SEED, MAX_SAMPLES, TEST_SIZE, OPENML_CACHE_D
 # config.py. Feature count is an exact expectation (from the paper's own
 # tables); row count is a loose sanity band, since minor OpenML-side
 # corrections since publication are plausible and shouldn't trip a false
-# failure. Confirmed exactly against a live fetch for bank_marketing via
-# spike_fetch_openml.py; california/magic_telescope not yet spiked, so
-# treat their bands as slightly less certain until Commit 3 actually runs.
+# failure.
 #
 # Looked up by direct indexing (EXPECTED_SHAPES[name], not .get(name)) so
 # a dataset added to config.DATASETS without a corresponding entry here
 # fails loudly with a KeyError on first load, rather than silently
-# skipping validation for it.
+# skipping validation for it. validate_dataset_registry() below is the
+# complementary check that catches this same class of mistake up front,
+# for every dataset at once, before any dataset is processed.
 EXPECTED_SHAPES = {
     "bank_marketing": (10578, 7),
     "california": (20640, 8),
     "magic_telescope": (13376, 10),
 }
+
+
+def validate_dataset_registry():
+    """
+    Startup consistency check between config.DATASETS and this module's
+    EXPECTED_SHAPES. Call once, before any dataset is processed -- not
+    per-dataset, unlike _validate_fetch() below, which checks an
+    individual fetch's actual shape against its own expectation.
+
+    config.DATASETS and EXPECTED_SHAPES are two separate dicts, in two
+    separate files, that have to be kept in sync by hand. Without this
+    check, a mismatch between them would only surface as a bare KeyError
+    the moment that specific dataset happens to be loaded -- possibly
+    well into a long run, and with no explanation of what's actually
+    wrong. This catches it immediately, for the whole registry at once,
+    with a message that names the problem.
+    """
+    config_names = set(DATASETS.keys())
+    metadata_names = set(EXPECTED_SHAPES.keys())
+
+    missing = sorted(config_names - metadata_names)
+    extra = sorted(metadata_names - config_names)
+
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(
+                f"missing from EXPECTED_SHAPES (present in config.DATASETS): {missing}"
+            )
+        if extra:
+            parts.append(
+                f"extra in EXPECTED_SHAPES (not present in config.DATASETS): {extra}"
+            )
+        raise ValueError(
+            "Dataset registry mismatch between config.DATASETS and "
+            "data_loader.EXPECTED_SHAPES: " + "; ".join(parts) +
+            ". Every dataset must have exactly one entry in both."
+        )
 
 
 def _validate_fetch(name, bunch):
@@ -81,9 +121,7 @@ def load_dataset(name):
 
     # Separate numeric and categorical input features. Includes "category"
     # alongside "object" -- fetch_openml's pandas parser infers proper
-    # categorical dtype for nominal features. (bank_marketing happens to
-    # have zero categorical features per the spike, but california/
-    # magic_telescope haven't been checked yet, so this stays generic.)
+    # categorical dtype for nominal features.
     cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
     num_cols = X.select_dtypes(exclude=["object", "category"]).columns.tolist()
     X[num_cols] = X[num_cols].apply(pd.to_numeric, errors="coerce")
@@ -154,6 +192,7 @@ def load_dataset(name):
 
 
 if __name__ == "__main__":
+    validate_dataset_registry()
     for name in DATASETS:
         ds = load_dataset(name)
         print(f"  {ds['name']} loaded successfully\n")
