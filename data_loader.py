@@ -10,9 +10,9 @@ from config import DATASETS, MASTER_SEED, MAX_SAMPLES, TEST_SIZE, OPENML_CACHE_D
 
 # Validation metadata, not experiment configuration -- lives here, not in
 # config.py. Feature count is an exact expectation (from the paper's own
-# tables); row count is a loose sanity band, since minor OpenML-side
-# corrections since publication are plausible and shouldn't trip a false
-# failure.
+# tables, Appendix A.1.1/A.1.2); row count is a loose sanity band, since
+# minor OpenML-side corrections since publication are plausible and
+# shouldn't trip a false failure.
 #
 # Looked up by direct indexing (EXPECTED_SHAPES[name], not .get(name)) so
 # a dataset added to config.DATASETS without a corresponding entry here
@@ -24,6 +24,16 @@ EXPECTED_SHAPES = {
     "bank_marketing": (10578, 7),
     "california": (20640, 8),
     "magic_telescope": (13376, 10),
+    "electricity": (38474, 7),
+    "house_16H": (13488, 16),
+    "credit": (16714, 10),
+    "phoneme": (3172, 5),
+    "wine": (2554, 11),
+    "cpu_act": (8192, 21),
+    "elevators": (16599, 16),
+    "wine_quality": (6497, 11),
+    "diamonds": (53940, 6),
+    "isolet": (7797, 613),
 }
 
 

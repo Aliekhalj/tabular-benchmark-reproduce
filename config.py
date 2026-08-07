@@ -4,6 +4,16 @@ DATASETS = {
     "bank_marketing": {"openml_id": 44126, "task": "classification"},
     "california": {"openml_id": 44025, "task": "regression"},
     "magic_telescope": {"openml_id": 44125, "task": "classification"},
+    "electricity": {"openml_id": 44120, "task": "classification"},
+    "house_16H": {"openml_id": 44123, "task": "classification"},
+    "credit": {"openml_id": 44089, "task": "classification"},
+    "phoneme": {"openml_id": 44127, "task": "classification"},
+    "wine": {"openml_id": 44091, "task": "classification"},
+    "cpu_act": {"openml_id": 44132, "task": "regression"},
+    "elevators": {"openml_id": 44134, "task": "regression"},
+    "wine_quality": {"openml_id": 44136, "task": "regression"},
+    "diamonds": {"openml_id": 44140, "task": "regression"},
+    "isolet": {"openml_id": 44135, "task": "regression"},
 }
 
 MASTER_SEED = 42
