@@ -1,3 +1,6 @@
+# visualize.py
+
+import math
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,19 +29,47 @@ DATASET_LABELS = {
 }
 
 # Per-panel width, derived from the original fixed 3-panel figsize (14, ...).
-# Scaling total figure width by this constant keeps today's 3-dataset figures
-# unchanged while extending cleanly to any number of datasets.
-BASE_FIG_WIDTH = 14
-BASE_DATASETS = 3
+# Held constant regardless of grid shape, so panel readability doesn't
+# degrade as dataset count grows -- only total figure width/height change.
+PANEL_WIDTH = 14 / 3
+PANEL_HEIGHT_BENCHMARK = 4.5
+PANEL_HEIGHT_FINDING2 = 4.5
+PANEL_HEIGHT_FINDING3 = 5
 
-PANEL_WIDTH = BASE_FIG_WIDTH / BASE_DATASETS
+# Datasets up to this count stay in a single row. Chosen to match exactly
+# the "3-4" case the layout is required to still handle well, and to
+# reproduce today's single-row output for the current dataset count (3)
+# without alteration.
+SINGLE_ROW_MAX = 4
+
 
 def _label(name):
     """Dataset display name for plot titles. Falls back to a readable
-    auto-generated label for any dataset not yet in DATASET_LABELS, instead
-    of the old DATASET_LABELS[name], which raised KeyError the moment a
-    dataset without a matching entry showed up."""
+    auto-generated label for any dataset not yet in DATASET_LABELS."""
     return DATASET_LABELS.get(name, name.replace("_", " ").title())
+
+
+def _grid_shape(n_datasets):
+    """
+    Determine (nrows, ncols) for the dataset panel grid.
+
+    n_datasets <= SINGLE_ROW_MAX: single row (nrows=1, ncols=n_datasets).
+    Reproduces the layout used before this commit for the current dataset
+    count, and keeps small counts as a simple left-to-right comparison --
+    the most readable option when everything already fits on one row.
+
+    Beyond that: a near-square grid (ncols = ceil(sqrt(n))), which keeps
+    panel width roughly constant as dataset count grows, rather than
+    continuing to squeeze an ever-wider single row into a fixed figure
+    width, and keeps empty trailing cells small relative to grid size
+    across the 10-15 dataset target range (e.g. 12 datasets -> 3x4, 0
+    empty cells; 15 -> 4x4, 1 empty cell).
+    """
+    if n_datasets <= SINGLE_ROW_MAX:
+        return 1, n_datasets
+    ncols = math.ceil(math.sqrt(n_datasets))
+    nrows = math.ceil(n_datasets / ncols)
+    return nrows, ncols
 
 
 # ── Figure 1: Benchmark — dot plot, broken y-axis ────────────────────────────
@@ -51,9 +82,13 @@ def plot_benchmark():
     # Tree models share the blue family; MLP is red
     dot_colors = ["#1f77b4", "#2ca02c", "#aec7e8", "#d62728"]
 
-    fig, axes = plt.subplots(1, n_datasets, figsize=(PANEL_WIDTH * n_datasets, 4.5),
-                              constrained_layout=True)
-    axes = np.atleast_1d(axes)
+    nrows, ncols = _grid_shape(n_datasets)
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(PANEL_WIDTH * ncols, PANEL_HEIGHT_BENCHMARK * nrows),
+        constrained_layout=True
+    )
+    axes = np.atleast_1d(axes).flatten()
     fig.suptitle(
         "Figure 1 — Benchmark: Tree Models vs MLP on Tabular Data",
         fontsize=13, fontweight="bold"
@@ -94,6 +129,11 @@ def plot_benchmark():
                    xy=(0.01, 0.01), xycoords="axes fraction",
                    fontsize=7, color="gray")
 
+    # Hide any unused grid cells (grid can exceed n_datasets, e.g. 13
+    # datasets in a 4x4 grid leaves 3 empty)
+    for ax in axes[n_datasets:]:
+        ax.set_visible(False)
+
     # Shared legend
     handles = [
         plt.scatter([], [], color=c, s=80, label=m)
@@ -114,9 +154,13 @@ def plot_finding2():
     datasets = df["dataset"].unique()
     n_datasets = len(datasets)
 
-    fig, axes = plt.subplots(1, n_datasets, figsize=(PANEL_WIDTH * n_datasets, 4.5),
-                              constrained_layout=True)
-    axes = np.atleast_1d(axes)
+    nrows, ncols = _grid_shape(n_datasets)
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(PANEL_WIDTH * ncols, PANEL_HEIGHT_FINDING2 * nrows),
+        constrained_layout=True
+    )
+    axes = np.atleast_1d(axes).flatten()
     fig.suptitle(
         "Figure 2 — Finding 2: MLP Degrades More Under Uninformative Features",
         fontsize=13, fontweight="bold"
@@ -158,6 +202,9 @@ def plot_finding2():
         ax.set_ylabel(metric)
         ax.legend(frameon=False, fontsize=9)
 
+    for ax in axes[n_datasets:]:
+        ax.set_visible(False)
+
     plt.savefig("fig2_finding2.png", bbox_inches="tight")
     print("Saved fig2_finding2.png")
     plt.show()
@@ -172,9 +219,13 @@ def plot_finding3():
     datasets = df["dataset"].unique()
     n_datasets = len(datasets)
 
-    fig, axes = plt.subplots(1, n_datasets, figsize=(PANEL_WIDTH * n_datasets, 5),
-                              constrained_layout=True)
-    axes = np.atleast_1d(axes)
+    nrows, ncols = _grid_shape(n_datasets)
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(PANEL_WIDTH * ncols, PANEL_HEIGHT_FINDING3 * nrows),
+        constrained_layout=True
+    )
+    axes = np.atleast_1d(axes).flatten()
     fig.suptitle(
         "Figure 3 — Finding 3: Trees Are Sensitive to Rotation, MLP Is Not",
         fontsize=13, fontweight="bold"
@@ -245,6 +296,9 @@ def plot_finding3():
         ax.annotate("* y-axis does not start at 0",
                    xy=(0.01, 0.01), xycoords="axes fraction",
                    fontsize=7, color="gray")
+
+    for ax in axes[n_datasets:]:
+        ax.set_visible(False)
 
     plt.savefig("fig3_finding3.png", bbox_inches="tight")
     print("Saved fig3_finding3.png")
