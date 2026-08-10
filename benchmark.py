@@ -1,5 +1,3 @@
-# benchmark.py
-
 import time
 from sklearn.metrics import accuracy_score, r2_score
 
@@ -27,7 +25,7 @@ def evaluate(model, X_train, X_test, y_train, y_test, task):
         metric = "Accuracy"
     else:
         score = round(r2_score(y_test, preds), 4)
-        metric = "R²"
+        metric = "R\u00b2"
 
     return score, metric, elapsed
 
@@ -69,31 +67,32 @@ def run_benchmark_for_dataset(name):
     return rows
 
 
-validate_dataset_registry()
+if __name__ == "__main__":
+    validate_dataset_registry()
 
-run_start = time.perf_counter()
-writer = IncrementalCSVWriter("benchmark_results.csv")
-tracker = ExperimentTracker()
+    run_start = time.perf_counter()
+    writer = IncrementalCSVWriter("benchmark_results.csv")
+    tracker = ExperimentTracker()
 
-for name in DATASETS:
-    start = time.perf_counter()
-    try:
-        rows = run_benchmark_for_dataset(name)
-    except Exception as exc:
-        tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
-        log_failed(name, STAGE_COMPUTATION, start, exc)
-        continue
+    for name in DATASETS:
+        start = time.perf_counter()
+        try:
+            rows = run_benchmark_for_dataset(name)
+        except Exception as exc:
+            tracker.record_failure(name, exc, stage=STAGE_COMPUTATION)
+            log_failed(name, STAGE_COMPUTATION, start, exc)
+            continue
 
-    try:
-        writer.add_rows(rows)
-    except Exception as exc:
-        tracker.record_failure(name, exc, stage=STAGE_WRITE)
-        log_failed(name, STAGE_WRITE, start, exc)
-        continue
+        try:
+            writer.add_rows(rows)
+        except Exception as exc:
+            tracker.record_failure(name, exc, stage=STAGE_WRITE)
+            log_failed(name, STAGE_WRITE, start, exc)
+            continue
 
-    tracker.record_success(name)
-    log_finished(name, start)
+        tracker.record_success(name)
+        log_finished(name, start)
 
-total_runtime = time.perf_counter() - run_start
-tracker.print_summary(total_runtime)
-print(f"\nResults saved to {writer.path}")
+    total_runtime = time.perf_counter() - run_start
+    tracker.print_summary(total_runtime)
+    print(f"\nResults saved to {writer.path}")
