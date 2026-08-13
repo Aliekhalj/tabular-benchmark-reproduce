@@ -43,3 +43,11 @@ TUNING_VAL_FRACTION = 9 / 70
 # ROTATION_MODEL_SEEDS -- the paper doesn't specify tuning-search seeds.
 TUNING_VAL_SPLIT_SEED = 501
 TUNING_SEARCH_SEED = 502
+
+# Phase 3: cross-validation
+CV_N_FOLDS = 5
+# Distinct from MASTER_SEED/TUNING_VAL_SPLIT_SEED/TUNING_SEARCH_SEED --
+# governs fold membership only, same division of labor tune.py already
+# established (a dedicated seed for row partitioning, MASTER_SEED reserved
+# for transform/model initialization).
+CV_FOLD_SEED = 503
