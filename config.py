@@ -12,7 +12,24 @@ DATASETS = {
     "wine_quality": {"openml_id": 44136, "task": "regression"},
     "diamonds": {"openml_id": 44140, "task": "regression"},
     "isolet": {"openml_id": 44135, "task": "regression"},
+    "pol": {"openml_id": 44122, "task": "classification"},
+    "kdd_ipums_la_97-small": {"openml_id": 44124, "task": "classification"},
+    "eye_movements": {"openml_id": 44130, "task": "classification"},
+    "jannis": {"openml_id": 44131, "task": "classification"},
+    "Ailerons": {"openml_id": 44137, "task": "regression"},
+    "house_sales": {"openml_id": 44144, "task": "regression"},
+    "MiamiHousing2016": {"openml_id": 44147, "task": "regression"},
+    "superconduct": {"openml_id": 44148, "task": "regression"},
+    "fifa": {"openml_id": 44026, "task": "regression"},
+    "Brazilian_houses": {"openml_id": 44141, "task": "regression"},
 }
+
+NEW_DATASETS = [
+    "pol", "kdd_ipums_la_97-small", "eye_movements", "jannis",
+    "Ailerons", "house_sales", "MiamiHousing2016", "superconduct",
+    "fifa", "Brazilian_houses",
+]
+
 
 MASTER_SEED = 42
 MAX_SAMPLES = 10000

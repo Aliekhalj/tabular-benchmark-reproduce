@@ -41,13 +41,14 @@ in this file.
 
 import json
 import time
+import argparse
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, PredefinedSplit, RandomizedSearchCV
 from sklearn.preprocessing import QuantileTransformer
 
 from config import (
-    DATASETS, MASTER_SEED,
+    DATASETS, NEW_DATASETS, MASTER_SEED,
     TUNING_N_ITER, TUNING_VAL_FRACTION, TUNING_VAL_SPLIT_SEED, TUNING_SEARCH_SEED,
 )
 from data_loader import load_dataset, validate_dataset_registry
@@ -56,7 +57,7 @@ from hyperparameter_spaces import get_search_space
 from benchmark import evaluate
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
-    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
+    log_finished, log_failed, select_datasets, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 MODEL_NAMES = ["RandomForest", "GBT", "XGBoost", "MLP"]
@@ -202,13 +203,20 @@ def run_tuning_for_dataset(name):
 
 
 if __name__ == "__main__":
-    validate_dataset_registry()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--datasets", choices=["all", "new"], default="all")
+    args = parser.parse_args()
+
+    dataset_names = select_datasets(DATASETS, NEW_DATASETS, args.datasets)
+    suffix = "" if args.datasets == "all" else "_new"
+
+    validate_dataset_registry()  # always checks the FULL registry, deliberately
 
     run_start = time.perf_counter()
-    writer = IncrementalCSVWriter("tuning_results.csv")
+    writer = IncrementalCSVWriter(f"tuning_results{suffix}.csv")
     tracker = ExperimentTracker()
 
-    for name in DATASETS:
+    for name in dataset_names:
         start = time.perf_counter()
         try:
             rows = run_tuning_for_dataset(name)

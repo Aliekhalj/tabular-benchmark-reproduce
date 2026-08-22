@@ -34,6 +34,16 @@ EXPECTED_SHAPES = {
     "wine_quality": (6497, 11),
     "diamonds": (53940, 6),
     "isolet": (7797, 613),
+    "pol": (10082, 26),
+    "kdd_ipums_la_97-small": (5188, 20),
+    "eye_movements": (7608, 20),
+    "jannis": (57580, 54),
+    "Ailerons": (13750, 33),
+    "house_sales": (21613, 15),
+    "MiamiHousing2016": (13932, 14),
+    "superconduct": (21263, 79),
+    "fifa": (18063, 5),
+    "Brazilian_houses": (10692, 8),
 }
 
 

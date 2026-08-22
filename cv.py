@@ -50,19 +50,20 @@ once across the entire 18.9-hour tuning run) justifies building.
 
 import json
 import time
+import argparse
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import QuantileTransformer
 
-from config import DATASETS, MASTER_SEED, CV_N_FOLDS, CV_FOLD_SEED
+from config import DATASETS, NEW_DATASETS, MASTER_SEED, CV_N_FOLDS, CV_FOLD_SEED
 from data_loader import load_dataset, validate_dataset_registry
 from models import get_models
 from benchmark import evaluate
 from tune import MODEL_NAMES
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
-    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
+    log_finished, log_failed, select_datasets, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 
