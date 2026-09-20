@@ -40,6 +40,8 @@ in this file.
 """
 
 import json
+import os
+import sys
 import time
 import argparse
 import numpy as np
@@ -178,6 +180,73 @@ def refit_and_evaluate(model_name, ds, best_params):
     return evaluate(model, X_tr, X_te, ds["y_train"], ds["y_test"], task)
 
 
+def _load_completed_datasets(path):
+    """
+    Detect which datasets have been fully tuned in an existing results CSV.
+    
+    A dataset is considered COMPLETE if it has exactly 4 rows corresponding
+    to the 4 expected models: RandomForest, GBT, XGBoost, MLP.
+    
+    Arguments:
+        path: Path to the tuning results CSV (e.g., "tuning_results_new.csv")
+    
+    Returns:
+        Set of dataset names that are complete. Empty set if file does not exist.
+    
+    Raises:
+        ValueError: If the CSV is malformed or has inconsistent data:
+        - Missing required columns (dataset, model)
+        - A dataset has 4+ rows (indicates duplicate or unexpected model entries)
+    
+    Note: If a dataset has 1-3 rows (incomplete), it is NOT added to the
+    returned set, so it will be rerun on the next invocation.
+    """
+    if not os.path.exists(path):
+        return set()
+    
+    try:
+        df = pd.read_csv(path)
+    except Exception as exc:
+        raise ValueError(f"Failed to read existing {path}: {exc}")
+    
+    # Validate required columns exist
+    required_cols = {"dataset", "model"}
+    if not required_cols.issubset(df.columns):
+        raise ValueError(
+            f"{path} is missing required columns. "
+            f"Found: {set(df.columns)}, Expected: {required_cols}"
+        )
+    
+    completed = set()
+    expected_models = {"RandomForest", "GBT", "XGBoost", "MLP"}
+    
+    for dataset_name in df["dataset"].unique():
+        subset = df[df["dataset"] == dataset_name]
+        models_in_subset = set(subset["model"].unique())
+        n_rows = len(subset)
+        
+        if n_rows == 4 and models_in_subset == expected_models:
+            # Exactly 4 rows, all expected models present, no duplicates
+            completed.add(dataset_name)
+        elif n_rows < 4:
+            # Incomplete: 0-3 rows. Will be rerun. Do not add to completed.
+            pass
+        else:
+            # n_rows > 4 or unexpected model names: data corruption
+            duplicates = [m for m in expected_models 
+                         if len(subset[subset["model"] == m]) > 1]
+            unexpected = models_in_subset - expected_models
+            raise ValueError(
+                f"Dataset '{dataset_name}' has {n_rows} rows with models {models_in_subset}. "
+                f"Expected exactly 4 rows (one per model). "
+                f"Duplicates: {duplicates if duplicates else 'none'}, "
+                f"Unexpected: {unexpected if unexpected else 'none'}. "
+                f"This indicates a data corruption issue. Please inspect {path}."
+            )
+    
+    return completed
+
+
 def run_tuning_for_dataset(name):
     log_stage(name, "Loading...")
     ds = load_dataset(name)
@@ -209,11 +278,58 @@ if __name__ == "__main__":
 
     dataset_names = select_datasets(DATASETS, NEW_DATASETS, args.datasets)
     suffix = "" if args.datasets == "all" else "_new"
+    output_path = f"tuning_results{suffix}.csv"
 
     validate_dataset_registry()  # always checks the FULL registry, deliberately
 
+    # Detect which datasets are already complete
+    try:
+        completed_datasets = _load_completed_datasets(output_path)
+    except ValueError as exc:
+        print(f"Error reading {output_path}: {exc}")
+        sys.exit(1)
+
+    # Filter to datasets that still need to be run
+    original_count = len(dataset_names)
+    dataset_names = [d for d in dataset_names if d not in completed_datasets]
+    new_count = len(dataset_names)
+
+    # Log what's being skipped
+    if completed_datasets:
+        print(f"\n{len(completed_datasets)} completed dataset(s) detected, skipping:")
+        for dataset_name in sorted(completed_datasets):
+            log_stage(dataset_name, "Already complete, skipping")
+        print()
+
+    if not dataset_names:
+        print(f"All {original_count} selected dataset(s) are complete. Nothing to do.")
+        sys.exit(0)
+
+    if len(completed_datasets) > 0:
+        print(f"Running remaining {new_count} of {original_count} dataset(s).\n")
+
+    # Create writer and load existing results (only from complete datasets)
+    # Partial rows from incomplete datasets are excluded and will be replaced by
+    # fresh complete runs. This prevents accumulation of partial rows (1-3 models
+    # per dataset) which would corrupt the CSV on resume.
+    writer = IncrementalCSVWriter(output_path)
+    if os.path.exists(output_path):
+        try:
+            existing_df = pd.read_csv(output_path)
+            # Keep only rows from datasets we're skipping (complete ones)
+            complete_rows_df = existing_df[existing_df['dataset'].isin(completed_datasets)]
+            writer.rows = complete_rows_df.to_dict('records')
+            print(f"Loaded {len(writer.rows)} complete result rows from {output_path}")
+            if len(existing_df) > len(complete_rows_df):
+                partial_rows = len(existing_df) - len(complete_rows_df)
+                print(f"Removed {partial_rows} incomplete/partial row(s) (will be replaced on rerun)\n")
+            else:
+                print()
+        except Exception as exc:
+            print(f"Error loading existing rows from {output_path}: {exc}")
+            sys.exit(1)
+
     run_start = time.perf_counter()
-    writer = IncrementalCSVWriter(f"tuning_results{suffix}.csv")
     tracker = ExperimentTracker()
 
     for name in dataset_names:
