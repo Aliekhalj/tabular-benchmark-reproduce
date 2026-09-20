@@ -40,7 +40,7 @@ EXPECTED_SHAPES = {
     "jannis": (57580, 54),
     "Ailerons": (13750, 33),
     "house_sales": (21613, 15),
-    "MiamiHousing2016": (13932, 14),
+    "MiamiHousing2016": (13932, 13),
     "superconduct": (21263, 79),
     "fifa": (18063, 5),
     "Brazilian_houses": (10692, 8),
