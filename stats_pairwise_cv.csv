@@ -1,0 +1,13 @@
+task,model_a,model_b,mean_score_a,mean_score_b,wilcoxon_stat,wilcoxon_p_raw,cohens_d_z,mean_rank_diff,nemenyi_cd,nemenyi_significant,wilcoxon_p_holm,wilcoxon_significant_holm_0.05
+classification,RandomForest,GBT,0.821,0.8283,11.0,0.105469,-0.5644,0.5455,1.4142,False,0.316406,False
+classification,RandomForest,XGBoost,0.821,0.8221,22.5,0.640625,-0.1305,0.0909,1.4142,False,0.640625,False
+classification,RandomForest,MLP,0.821,0.8008,4.0,0.006836,1.0717,1.5455,1.4142,True,0.027344,True
+classification,GBT,XGBoost,0.8283,0.8221,12.0,0.130859,0.5109,0.4545,1.4142,False,0.316406,False
+classification,GBT,MLP,0.8283,0.8008,2.0,0.00293,1.1017,2.0909,1.4142,True,0.014648,True
+classification,XGBoost,MLP,0.8221,0.8008,0.0,0.000977,1.2787,1.6364,1.4142,True,0.005859,True
+regression,RandomForest,GBT,0.8325,0.8443,13.0,0.04248,-0.5103,0.5833,1.354,False,0.127441,False
+regression,RandomForest,XGBoost,0.8325,0.8472,11.0,0.026855,-0.5456,1.0,1.354,False,0.107422,False
+regression,RandomForest,MLP,0.8325,0.8154,15.0,0.063965,0.3604,0.9167,1.354,False,0.12793,False
+regression,GBT,XGBoost,0.8443,0.8472,27.0,0.380371,-0.1963,0.4167,1.354,False,0.380371,False
+regression,GBT,MLP,0.8443,0.8154,10.0,0.020996,0.7498,1.5,1.354,True,0.10498,False
+regression,XGBoost,MLP,0.8472,0.8154,3.0,0.002441,1.0712,1.9167,1.354,True,0.014648,True

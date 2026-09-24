@@ -1,0 +1,9 @@
+task,model,mean_rank,mean_score,n_datasets,friedman_chi2,friedman_p,friedman_significant_0.05
+classification,RandomForest,2.4545,0.8269,11,13.1284,0.004366920465525449,True
+classification,GBT,1.6364,0.8355,11,13.1284,0.004366920465525449,True
+classification,XGBoost,2.3182,0.8283,11,13.1284,0.004366920465525449,True
+classification,MLP,3.5909,0.8079,11,13.1284,0.004366920465525449,True
+regression,RandomForest,2.75,0.8374,12,13.5378,0.0036067951512124222,True
+regression,GBT,2.2917,0.8481,12,13.5378,0.0036067951512124222,True
+regression,XGBoost,1.5417,0.8519,12,13.5378,0.0036067951512124222,True
+regression,MLP,3.4167,0.8235,12,13.5378,0.0036067951512124222,True
