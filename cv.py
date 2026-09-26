@@ -52,20 +52,19 @@ import json
 import os
 import sys
 import time
-import argparse
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import QuantileTransformer
 
-from config import DATASETS, NEW_DATASETS, MASTER_SEED, CV_N_FOLDS, CV_FOLD_SEED
+from config import DATASETS, MASTER_SEED, CV_N_FOLDS, CV_FOLD_SEED
 from data_loader import load_dataset, validate_dataset_registry
 from models import get_models
 from benchmark import evaluate
 from tune import MODEL_NAMES
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
-    log_finished, log_failed, select_datasets, STAGE_COMPUTATION, STAGE_WRITE,
+    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 
@@ -284,17 +283,13 @@ def run_cv_for_dataset(name, tuned_params):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--datasets", choices=["all", "new"], default="all")
-    args = parser.parse_args()
     
-    dataset_names = select_datasets(DATASETS, NEW_DATASETS, args.datasets)
-    suffix = "" if args.datasets == "all" else "_new"
-    agg_path = f"cv_results{suffix}.csv"
-    fold_path = f"cv_fold_results{suffix}.csv"
+    dataset_names = list(DATASETS)
+    agg_path = f"cv_results.csv"
+    fold_path = f"cv_fold_results.csv"
 
     validate_dataset_registry()
-    tuned_params = _load_tuned_params(path=f"tuning_results{suffix}.csv")
+    tuned_params = _load_tuned_params(path=f"tuning_results.csv")
 
     # Resume/skip: a dataset is only skipped if BOTH cv_results and
     # cv_fold_results already hold a complete result for it. Otherwise

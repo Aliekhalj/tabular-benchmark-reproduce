@@ -24,11 +24,7 @@ DATASETS = {
     "Brazilian_houses": {"openml_id": 44141, "task": "regression"},
 }
 
-NEW_DATASETS = [
-    "pol", "kdd_ipums_la_97-small", "eye_movements", "jannis",
-    "Ailerons", "house_sales", "MiamiHousing2016", "superconduct",
-    "fifa", "Brazilian_houses",
-]
+
 
 
 MASTER_SEED = 42

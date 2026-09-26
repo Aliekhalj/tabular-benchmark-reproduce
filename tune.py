@@ -43,14 +43,13 @@ import json
 import os
 import sys
 import time
-import argparse
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, PredefinedSplit, RandomizedSearchCV
 from sklearn.preprocessing import QuantileTransformer
 
 from config import (
-    DATASETS, NEW_DATASETS, MASTER_SEED,
+    DATASETS, MASTER_SEED,
     TUNING_N_ITER, TUNING_VAL_FRACTION, TUNING_VAL_SPLIT_SEED, TUNING_SEARCH_SEED,
 )
 from data_loader import load_dataset, validate_dataset_registry
@@ -59,7 +58,7 @@ from hyperparameter_spaces import get_search_space
 from benchmark import evaluate
 from experiment_utils import (
     IncrementalCSVWriter, ExperimentTracker, log_stage,
-    log_finished, log_failed, select_datasets, STAGE_COMPUTATION, STAGE_WRITE,
+    log_finished, log_failed, STAGE_COMPUTATION, STAGE_WRITE,
 )
 
 MODEL_NAMES = ["RandomForest", "GBT", "XGBoost", "MLP"]
@@ -188,7 +187,7 @@ def _load_completed_datasets(path):
     to the 4 expected models: RandomForest, GBT, XGBoost, MLP.
     
     Arguments:
-        path: Path to the tuning results CSV (e.g., "tuning_results_new.csv")
+        path: Path to the tuning results CSV (e.g., "tuning_results.csv")
     
     Returns:
         Set of dataset names that are complete. Empty set if file does not exist.
@@ -272,13 +271,10 @@ def run_tuning_for_dataset(name):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--datasets", choices=["all", "new"], default="all")
-    args = parser.parse_args()
 
-    dataset_names = select_datasets(DATASETS, NEW_DATASETS, args.datasets)
-    suffix = "" if args.datasets == "all" else "_new"
-    output_path = f"tuning_results{suffix}.csv"
+    dataset_names = list(DATASETS)
+
+    output_path = f"tuning_results.csv"
 
     validate_dataset_registry()  # always checks the FULL registry, deliberately
 

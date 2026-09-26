@@ -2,7 +2,7 @@
 
 """
 Visualization of the final statistical analysis (stats.py's PRIMARY
-output only -- tuning_results_merged.csv's test_score results). No
+output only -- tuning_results.csv's test_score results). No
 new statistics are computed anywhere in this file: every number
 plotted is read directly from stats_summary.csv / stats_pairwise.csv.
 The one piece of layout logic that isn't a straight CSV read is

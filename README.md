@@ -12,7 +12,7 @@ This project reproduces and extends the core empirical comparison from the paper
 
 Beyond a plain benchmark comparison, this project adds:
 
-- **23 OpenML datasets** (11 classification, 12 regression), expanded from an initial set of 13 through a documented incremental process
+- **23 OpenML datasets** (11 classification, 12 regression).
 - **Paper-sourced hyperparameter search spaces** (Appendix A.3) with randomized search tuning
 - **5-fold cross-validation** as a robustness check alongside the tuned held-out test score
 - **Formal statistical testing** (Friedman, Nemenyi, Wilcoxon with Holm correction, Cohen's d) comparing the four models
@@ -81,7 +81,6 @@ All datasets are fetched from OpenML by fixed `data_id` (`config.py`), capped at
 | superconduct | 44148 | 21,263 × 79 |
 | wine_quality | 44136 | 6,497 × 11 |
 
-The 10 datasets `pol` through `Brazilian_houses` (`config.NEW_DATASETS`) were added after the original 13-dataset benchmark. Results from the two batches are combined via `merge_new_results.py` (see [Repository Structure](#repository-structure)).
 
 ---
 
@@ -100,7 +99,6 @@ Preprocessing (`data_loader.py`):
 - Categorical features one-hot encoded (fit on train, applied to test); tree models receive these features directly
 - MLP additionally receives `QuantileTransformer(output_distribution="normal")`-Gaussianized features, fit on train only
 
-> **Not independently re-verified for this README:** whether any of the 10 later-added datasets contain categorical features. `hyperparameter_spaces.py` documents that plain GBT (rather than HistGradientBoostingTrees) was chosen because the original 13 datasets are numerical-only, per the paper's own dataset tracks — whether that justification still holds across all 23 has not been rechecked here.
 
 ---
 
@@ -116,8 +114,7 @@ Untuned baseline: each model fit once per dataset with default hyperparameters (
 - Search spaces sourced from the paper's Appendix A.3 (Tables 3, 5, 6, 7), implemented in `hyperparameter_spaces.py`. Random Forest, GBT, and XGBoost match the paper's specification exactly, modulo documented sklearn/XGBoost API naming differences (e.g. `deviance` → `log_loss`). The MLP space is a documented partial adaptation: scikit-learn's MLP has no dropout or learning-rate-scheduler parameter, so those two paper-specified search dimensions are excluded rather than approximated.
 - Validation split: `TUNING_VAL_FRACTION = 9/70` of the training pool, carved out with a dedicated seed (`TUNING_VAL_SPLIT_SEED=501`), held fixed across all 4 models per dataset. The test set is never touched during search.
 - Best hyperparameters are refit on the full training pool and evaluated once on the test set.
-- Supports `--datasets all` / `--datasets new`, with resume/skip: rerunning a partially completed job detects and skips datasets with complete results, and discards/reruns any dataset left partially complete by an interruption.
-- Output: `tuning_results.csv` / `tuning_results_new.csv`.
+- Output: `tuning_results.csv` .
 
 ### Cross-Validation (`cv.py`)
 
@@ -125,14 +122,8 @@ Untuned baseline: each model fit once per dataset with default hyperparameters (
 - Uses the **frozen** hyperparameters from tuning (no re-search); this is not nested CV.
 - For MLP, a fresh `QuantileTransformer` is fit per fold, on that fold's training rows only, to avoid leaking validation rows into the transform.
 - A **supplementary robustness estimate** alongside the single tuned test score — not a replacement for it.
-- Same `--datasets` / resume-skip support as `tune.py`.
-- Output: `cv_fold_results.csv` (per fold), `cv_results.csv` (per-dataset aggregate), plus `_new` variants.
+- Output: `cv_fold_results.csv` (per fold), `cv_results.csv` (per-dataset aggregate).
 
-### Merging (`merge_new_results.py`)
-
-Concatenates the original-13 and new-10 result sets into `tuning_results_merged.csv`, `cv_results_merged.csv`, `cv_fold_results_merged.csv`, after checking for duplicate `(dataset, model)` keys across the two halves.
-
----
 
 ## Findings 2 & 3
 
@@ -147,7 +138,7 @@ Both experiments use **GBT and MLP only** — hardcoded in `finding2.py`/`findin
 
 ## Statistical Analysis (`stats.py`)
 
-Comparison of the four models' **test_score** (from `tuning_results_merged.csv`), classification and regression analyzed separately. The statistical unit is one score per (dataset, model) — CV fold scores are never treated as independent observations. A secondary sensitivity check repeats the same analysis on `cv_results_merged.csv`'s 5-fold mean score.
+Comparison of the four models' **test_score** (from `tuning_results.csv`), classification and regression analyzed separately. The statistical unit is one score per (dataset, model) — CV fold scores are never treated as independent observations. A secondary sensitivity check repeats the same analysis on `cv_results.csv`'s 5-fold mean score.
 
 For each task: Friedman test (omnibus), mean rank per model, Nemenyi post-hoc critical difference, all 6 pairwise Wilcoxon signed-rank tests (Holm-corrected), and paired Cohen's d (d_z).
 
@@ -215,12 +206,11 @@ The mean-rank **ordering** of the four models from the CV `mean_score` matched t
 ├── data_loader.py               # OpenML fetch, preprocessing, train/test split
 ├── models.py                    # RF / GBT / XGBoost / MLP definitions
 ├── hyperparameter_spaces.py     # paper-sourced search spaces
-├── experiment_utils.py          # shared logging / incremental CSV writer
+├── experiment_utils.py          # shared logging 
 │
 ├── benchmark.py                  → benchmark_results.csv
-├── tune.py                       → tuning_results.csv, tuning_results_new.csv
-├── cv.py                         → cv_results.csv, cv_fold_results.csv (+ _new)
-├── merge_new_results.py          → *_merged.csv
+├── tune.py                       → tuning_results.csv, 
+├── cv.py                         → cv_results.csv, cv_fold_results.csv 
 ├── finding2.py                   → finding2_results.csv
 ├── finding3.py                   → finding3_results.csv
 ├── stats.py                      → stats_summary.csv, stats_pairwise.csv (+ _cv)
@@ -252,11 +242,10 @@ python data_loader.py                    # validates all 23 datasets load correc
 
 python benchmark.py
 
-python tune.py --datasets all
-python tune.py --datasets new
-python cv.py --datasets all
-python cv.py --datasets new
-python merge_new_results.py
+python tune.py 
+python cv.py 
+
+
 
 python finding2.py
 python finding3.py
@@ -265,8 +254,7 @@ python stats.py
 python visualize.py
 python stats_visualize.py
 ```
-
-`tune.py` and `cv.py` support resuming an interrupted run: rerunning the same command detects datasets with complete results and skips them, while safely discarding and rerunning any dataset left partially complete by the interruption.
+.
 
 ---
 
@@ -298,7 +286,6 @@ Produced by `stats_visualize.py`:
 - No transformer-based tabular models (the paper's other neural baselines)
 - CPU-only throughout (not independently re-confirmed for the larger later-added datasets, e.g. jannis at 57,580 rows or superconduct at 21,263 rows, but no evidence to the contrary)
 - `RandomizedSearchCV` uses 50 iterations per (dataset, model); the paper's own search budget is larger
-- Whether any of the 10 later-added datasets contain categorical features (relevant to the GBT-vs-HistGradientBoostingTrees choice documented in `hyperparameter_spaces.py`) has not been rechecked against the paper's numerical-only justification for the original 13
 
 Unlike the original 3-dataset version of this project, results here are backed by a formal statistical analysis (Friedman / Nemenyi / Wilcoxon / Cohen's d) rather than qualitative observation alone.
 

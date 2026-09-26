@@ -57,19 +57,7 @@ def log_failed(name, stage, start_time, exc):
     print(format_exception(exc))
     return elapsed
 
-def select_datasets(all_datasets, new_datasets, mode):
-    """
-    mode: "all" (default -- the full registry, preserving today's
-    behavior exactly) or "new" (only NEW_DATASETS). Both tune.py and
-    cv.py use this identically. Raises on an unrecognized mode rather
-    than silently defaulting to something.
-    """
-    if mode == "all":
-        return list(all_datasets)
-    elif mode == "new":
-        return list(new_datasets)
-    else:
-        raise ValueError(f"Unrecognized dataset selection mode: {mode!r}")
+
 
 
 class IncrementalCSVWriter:

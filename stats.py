@@ -4,11 +4,11 @@
 Phase 4: Final statistical analysis comparing RandomForest, GBT,
 XGBoost, and MLP across the 23-dataset benchmark.
 
-PRIMARY analysis: tuning_results_merged.csv's test_score -- one
+PRIMARY analysis: tuning_results.csv's test_score -- one
 held-out 30%-test-set evaluation per dataset, frozen best
 hyperparameters. Matches the paper's own reporting convention.
 
-SECONDARY / sensitivity analysis: cv_results_merged.csv's mean_score
+SECONDARY / sensitivity analysis: cv_results.csv's mean_score
 -- the already-aggregated 5-fold CV mean per dataset (frozen
 hyperparameters, training-pool only). Included to check whether
 conclusions are sensitive to the specific 30% test split, NOT a
@@ -18,8 +18,8 @@ single test_score, never a substitute for it.
 
 STATISTICAL UNIT throughout: one score per (dataset, model). The 5 CV
 folds are never treated as independent observations -- this module
-reads cv_results_merged.csv's already-aggregated mean_score, never
-cv_fold_results_merged.csv.
+reads cv_results.csv's already-aggregated mean_score, never
+cv_fold_results.csv.
 
 Classification and regression are analyzed completely separately
 throughout (Accuracy and R\u00b2 are not on a comparable scale).
@@ -298,7 +298,7 @@ def run_source(path, score_col, source_label):
 def main():
     try:
         primary_summary, primary_pairwise = run_source(
-            "tuning_results_merged.csv", "test_score", "PRIMARY: held-out test_score"
+            "tuning_results.csv", "test_score", "PRIMARY: held-out test_score"
         )
     except (ValueError, FileNotFoundError, KeyError) as exc:
         print(f"\nSTATS ANALYSIS STOPPED (primary source): {exc}")
@@ -306,7 +306,7 @@ def main():
 
     try:
         secondary_summary, secondary_pairwise = run_source(
-            "cv_results_merged.csv", "mean_score", "SECONDARY: CV mean_score (sensitivity check)"
+            "cv_results.csv", "mean_score", "SECONDARY: CV mean_score (sensitivity check)"
         )
     except (ValueError, FileNotFoundError, KeyError) as exc:
         print(f"\nSTATS ANALYSIS STOPPED (secondary/CV source): {exc}")
